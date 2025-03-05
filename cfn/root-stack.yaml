@@ -1,0 +1,937 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "VPC with private only subnets: Root stack template to create
+  VPC / Private Subnets, Network ACL, Route Tables, Security Group, VPC Endpoints."
+
+Metadata:
+  TemplateName: root-stack.yaml
+  TemplateType: Root Stack Template
+  Version: 1.0.0
+  Owner: Subhamay Bhattacharyya
+  ProjectName: Private VPC
+  Modification History:
+     1.0.0  Feb 16, 2025  Initial Version
+  StepsToTest: Manually verify the Stack.
+  StepsToCleanup: Stack delete command
+
+  Parameters:
+    ProjectName: The project name used as a resource tag value.
+    Environment: The environment name used as a resource tag value (devl, test, prod).
+    GitHubRef: The GitHub reference name used as a resource tag value.
+    GitHubURL: The GitHub URL used as a resource tag value.
+    GitHubWFRunNumber: The workflow run number used as a resource tag value.
+    GitHubSHA: The SHA value of the last commit used as a resource tag value.
+    GitHubRepository: The GitHub repository name used as a resource tag value.
+    CiBuild: The CI build of the feature branch to be appended to a resource name.
+    CodeRepositoryS3Bucket: The S3 bucket for the nested stack templates.
+    S3VpcEndpoint: Enable S3 VPC Endpoint (true/false).
+    DynamoDBVpcEndpoint: Enable DynamoDB VPC Endpoint (true/false).
+    KmsVpcEndpoint: Enable KMS VPC Endpoint (true/false).
+    SecretManagerVpcEndpoint: Enable Secret Manager VPC Endpoint (true/false).
+    SnsVpcEndpoint: Enable SNS VPC Endpoint (true/false).
+    SqsVpcEndpoint: Enable SQS VPC Endpoint (true/false).
+    CloudWatchVpcEndpoint: Enable CloudWatch VPC Endpoint (true/false).
+    RekognitionVpcEndpoint: Enable Rekognition VPC Endpoint (true/false).
+    GlueVpcEndpoint: Enable Glue VPC Endpoint (true/false).
+    KinesisVpcEndpoint: Enable Kinesis VPC Endpoint (true/false).
+    AthenaVpcEndpoint: Enable Athena VPC Endpoint (true/false).
+
+  Mappings:
+    SubnetConfig: Defines the CIDR blocks for the VPC and subnets.
+
+  Conditions:
+    CreateS3VpcEndpoint: Condition to create S3 VPC Endpoint.
+    CreateDynamoDBVpcEndpoint: Condition to create DynamoDB VPC Endpoint.
+    CreateKmsVpcEndpoint: Condition to create KMS VPC Endpoint.
+    CreateSecretManagerVpcEndpoint: Condition to create Secret Manager VPC Endpoint.
+    CreateSnsVpcEndpoint: Condition to create SNS VPC Endpoint.
+    CreateSqsVpcEndpoint: Condition to create SQS VPC Endpoint.
+    CreateCloudWatchVpcEndpoint: Condition to create CloudWatch VPC Endpoint.
+    CreateRekognitionVpcEndpoint: Condition to create Rekognition VPC Endpoint.
+    CreateGlueVpcEndpoint: Condition to create Glue VPC Endpoint.
+    CreateKinesisVpcEndpoint: Condition to create Kinesis VPC Endpoint.
+    CreateAthenaVpcEndpoint: Condition to create Athena VPC Endpoint.
+
+  Resources:
+    VPC: Creates the VPC stack.
+    NetworkACL: Creates the Network ACL stack.
+    PrivateSubnetAZ1: Creates the private subnet in AZ1.
+    PrivateSubnetAZ2: Creates the private subnet in AZ2.
+    VpcEndpointSecurityGroup: Creates the security group for VPC endpoints.
+    VpcEndpointSecurityGroupIngressHTTPS: Creates the ingress rule for HTTPS in the VPC endpoint security group.
+    VpcEndpointSecurityGroupEgressHTTPS: Creates the egress rule for HTTPS in the VPC endpoint security group.
+    S3GatewayVpce: Creates the S3 VPC Gateway Endpoint.
+    DynamoDBGatewayVpce: Creates the DynamoDB VPC Gateway Endpoint.
+    KmsInterfaceVpce: Creates the KMS VPC Interface Endpoint.
+    SecretManagerInterfaceVpce: Creates the Secret Manager VPC Interface Endpoint.
+    SnsInterfaceVpce: Creates the SNS VPC Interface Endpoint.
+    SqsInterfaceVpce: Creates the SQS VPC Interface Endpoint.
+    CloudWatchInterfaceVpce: Creates the CloudWatch VPC Interface Endpoint.
+    RekognitionInterfaceVpce: Creates the Rekognition VPC Interface Endpoint.
+    GlueInterfaceVpce: Creates the Glue VPC Interface Endpoint.
+    KinesisInterfaceVpce: Creates the Kinesis VPC Interface Endpoint.
+    AthenaInterfaceVpce: Creates the Athena VPC Interface Endpoint.
+
+  Outputs:
+    VpcId: The ID of the VPC.
+    VpcCidrBlock: The CIDR block of the VPC.
+    VpcCidrBlockAssociations: The CIDR block associations of the VPC.
+    VpcDefaultNetworkAcl: The default network ACL of the VPC.
+    VpcDefaultSecurityGroup: The default security group of the VPC.
+    NetworkAclId: The ID of the Network ACL.
+    PrivateSubnetAZ1Id: The ID of the private subnet in AZ1.
+    PrivateSubnetAZ1AvailabilityZone: The availability zone of the private subnet in AZ1.
+    PrivateSubnetAZ1AvailabilityZoneId: The availability zone ID of the private subnet in AZ1.
+    PrivateSubnetAZ1CidrBlock: The CIDR block of the private subnet in AZ1.
+    PrivateSubnetAZ1NetworkAclAssociationId: The network ACL association ID of the private subnet in AZ1.
+    PrivateSubnetAZ1RTAssociationId: The route table association ID of the private subnet in AZ1.
+    PrivateSubnetAZ2Id: The ID of the private subnet in AZ2.
+    PrivateSubnetAZ2AvailabilityZone: The availability zone of the private subnet in AZ2.
+    PrivateSubnetAZ2AvailabilityZoneId: The availability zone ID of the private subnet in AZ2.
+    PrivateSubnetAZ2CidrBlock: The CIDR block of the private subnet in AZ2.
+    PrivateSubnetAZ2NetworkAclAssociationId: The network ACL association ID of the private subnet in AZ2.
+    PrivateSubnetAZ2RTAssociationId: The route table association ID of the private subnet in AZ2.
+    VpcEndpointSecurityGroupId: The ID of the VPC endpoint security group.
+    S3VpceGatewayEndpointId: The ID of the S3 VPC Gateway Endpoint.
+    DynamoDBVpceId: The ID of the DynamoDB VPC Gateway Endpoint.
+    KmsVpceId: The ID of the KMS VPC Interface Endpoint.
+    SecretManagerVpceId: The ID of the Secret Manager VPC Interface Endpoint.
+    SnsVpceId: The ID of the SNS VPC Interface Endpoint.
+    SqsVpceId: The ID of the SQS VPC Interface Endpoint.
+    CloudWatchVpceId: The ID of the CloudWatch VPC Interface Endpoint.
+    RekognitionVpceId: The ID of the Rekognition VPC Interface Endpoint.
+    GlueInterfaceVpceId: The ID of the Glue VPC Interface Endpoint.
+    KinesisInterfaceVpceId: The ID of the Kinesis VPC Interface Endpoint.
+    AthenaInterfaceVpceId: The ID of the Athena VPC Interface Endpoint.
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      ################################## Project Name and Environment ##############################
+      - Label:
+          default: 'Project Name and Environment:'
+        Parameters:
+          - ProjectName
+          - Environment
+      ################################## GitHub Attributes #########################################
+      - Label:
+          default: 'GitHub Attributes:'
+        Parameters:
+          - GitHubRef
+          - GitHubURL
+          - GitHubWFRunNumber
+          - GitHubSHA
+          - GitHubRepository
+          - CiBuild
+      ################################## Code Repository ###########################################
+      - Label:
+          default: 'Code Repository:'
+        Parameters:
+          - CodeRepositoryS3Bucket
+      ################################## VPC Endpoint Configuration ################################
+      - Label:
+          default: 'VPC Endpoint Configuration:'
+        Parameters:
+          - S3VpcEndpoint
+          - DynamoDBVpcEndpoint
+          - KmsVpcEndpoint
+          - SecretManagerVpcEndpoint
+          - SnsVpcEndpoint
+          - SqsVpcEndpoint
+          - CloudWatchVpcEndpoint
+          - RekognitionVpcEndpoint
+          - GlueVpcEndpoint
+          - KinesisVpcEndpoint
+          - AthenaVpcEndpoint
+
+    ParameterLabels:
+      ################################## Project Name and Environment ##############################
+      ProjectName:
+        default: "Name of the Project."
+      Environment:
+        default: "Name of the Deployment Environment."
+      ################################## GitHub Attributes #########################################
+      GitHubRef:
+        default: "GitHub Reference Branch or Tag."
+      GitHubURL:
+        default: "URL of the GitHub Repository."
+      GitHubWFRunNumber:
+        default: "GitHub Workflow Execution Run Number."
+      GitHubSHA:
+        default: "GitHub Commit SHA."
+      GitHubRepository:
+        default: "Name of the GitHub Repository."
+      CiBuild:
+        default: "Continuous Integration Build Identifier."
+      ################################## Code Repository Bucket ####################################
+      CodeRepositoryS3Bucket:
+        default: S3 Bucket where the nested stack templates are available.
+      ################################## VPC Endpoint Configuration ################################
+      S3VpcEndpoint:
+        default: "Enable S3 VPC Endpoint."
+      DynamoDBVpcEndpoint:
+        default: "Enable DynamoDB VPC Endpoint."
+      KmsVpcEndpoint:
+        default: "Enable KMS VPC Endpoint."
+      SecretManagerVpcEndpoint:
+        default: "Enable Secret Manager VPC Endpoint."
+      SnsVpcEndpoint:
+        default: "Enable SNS VPC Endpoint."
+      SqsVpcEndpoint:
+        default: "Enable SQS VPC Endpoint."
+      CloudWatchVpcEndpoint: 
+        default: "Enable CloudWatch VPC Endpoint."
+      RekognitionVpcEndpoint:
+        default: "Enable Rekognition VPC Endpoint."
+      GlueVpcEndpoint:
+       default: "Enable Glue VPC Endpoint."
+      KinesisVpcEndpoint:
+        default: "Enable Kinesis VPC Endpoint."
+      AthenaVpcEndpoint:
+        default: "Enable Athena VPC Endpoint."
+
+Parameters:
+  ###################################### Project Name and Environment ##############################
+  ProjectName:
+    Default: private-vpc
+    Description: "The Project name to be used as a resource tag value."
+    Type: String
+    MinLength: "5"
+    MaxLength: "30"
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "The length should be between 5 and 30, must contain only lowercase alphabets, numbers, or dashes."
+  
+  Environment:
+    Default: devl
+    Description: "The Environment name to be used as a resource tag value."
+    Type: String
+    AllowedValues: ["devl", "test", "prod"]
+    ConstraintDescription: "The Environment must be devl / test or prod"
+
+  ###################################### GitHub Attributes #########################################
+  GitHubRef:
+    Default: ref_name
+    Description: "GitHub Ref name to be used as a resource tag value."
+    Type: String
+    AllowedPattern: "^[a-zA-Z0-9/_-]+$"
+    ConstraintDescription: "The GitHub Ref Name can only contain alphanumeric characters, slashes, underscores, and hyphens."
+  
+  GitHubURL:
+    Default: "https://github.com/subhamay-bhattacharyya/0108-networking-cft.git"
+    Description: "GitHub URL to be used as a resource tag value."
+    Type: String
+    AllowedPattern: "^https://github.com/[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+/?$"
+    ConstraintDescription: "The GitHub URL must start with 'https://github.com/' and can only contain alphanumeric characters, dots, underscores, and hyphens."
+  
+  GitHubWFRunNumber:
+    Default: "1"
+    Description: "The Workflow run number to be used as a resource tag value."
+    Type: Number
+  
+  GitHubSHA:
+    Default: "d3b07384d113edec49eaa6238ad5ff00f6fb3796"
+    Description: "The sha value of the last commit to be used as a resource tag value."
+    Type: String
+    AllowedPattern: "^[a-fA-F0-9]{40}$"
+    ConstraintDescription: "The SHA value must be a 40-character hexadecimal string."
+  
+  GitHubRepository:
+    Default: 0108-networking-cft
+    Description: The GitHub Repository name to be used as a resource tag value.
+    Type: String
+    MinLength: "10"
+    MaxLength: "30"
+    AllowedPattern: ^\d{4}-[a-z]+(-[a-z]+)*$
+    ConstraintDescription: The repository length should be between 10 and 30, must
+      contain only lowercase letters, numbers, dashes, dots, and should start
+      with a letter.
+
+  CiBuild:
+    Default: ""
+    Description: "Ci Build of the feature branch to be appended to a resource name."
+    Type: String
+  ###################################### Code Repository ###########################################
+  CodeRepositoryS3Bucket:
+    Default: subhamay-aws-cfn-nested-stack-templates-us-east-1
+    Description: S3 Bucket for the nested stack templates.
+    Type: String
+    AllowedPattern: ^[a-z0-9.-]{3,63}$
+    ConstraintDescription: The S3 bucket name must be between 3 and 63 characters
+      long, and can only contain lowercase letters, numbers, dots, and hyphens. 
+
+  ###################################### Vpc Endpoint Configuration ################################
+  S3VpcEndpoint:
+    Default: "false"
+    Description: "Enable S3 VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+  DynamoDBVpcEndpoint: 
+    Default: "false"
+    Description: "Enable DynamoDB VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+  KmsVpcEndpoint: 
+    Default: "true"
+    Description: "Enable KMS VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+  SecretManagerVpcEndpoint: 
+    Default: "false"
+    Description: "Enable Secret Manager VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+  SnsVpcEndpoint: 
+    Default: "false"
+    Description: "Enable SNS VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+  SqsVpcEndpoint: 
+    Default: "false"
+    Description: "Enable SQS VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+  CloudWatchVpcEndpoint: 
+    Default: "false"
+    Description: "Enable CloudWatch VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+  RekognitionVpcEndpoint:
+    Default: "false"
+    Description: "Enable Rekognition VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+  GlueVpcEndpoint:
+    Default: "false"
+    Description: "Enable Glue VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+  KinesisVpcEndpoint:
+    Default: "false"
+    Description: "Enable Kinesis VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+  AthenaVpcEndpoint:
+    Default: "false"
+    Description: "Enable Athena VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
+######################################## Mapppings #################################################
+Mappings:
+  SubnetConfig:
+    VpcCidrBlock:
+      CIDR: 10.7.0.0/16
+    PrivateSubnetAZ1CidrBlock:
+      CIDR: 10.7.0.0/24
+    PrivateSubnetAZ2CidrBlock:
+      CIDR: 10.7.64.0/24 
+    PublicSubnetAZ1CidrBlock:
+      CIDR: 10.7.128.0/24
+    PublicSubnetAZ2CidrBlock:
+      CIDR: 10.7.192.0/24 
+
+Conditions:
+  CreateS3VpcEndpoint: !Equals [!Ref S3VpcEndpoint, "true"]
+  CreateDynamoDBVpcEndpoint: !Equals [!Ref DynamoDBVpcEndpoint, "true"]
+  CreateKmsVpcEndpoint: !Equals [!Ref KmsVpcEndpoint, "true"]
+  CreateSecretManagerVpcEndpoint: !Equals [!Ref SecretManagerVpcEndpoint, "true"]
+  CreateSnsVpcEndpoint: !Equals [!Ref SnsVpcEndpoint, "true"]
+  CreateSqsVpcEndpoint: !Equals [!Ref SqsVpcEndpoint, "true"]
+  CreateCloudWatchVpcEndpoint: !Equals [!Ref CloudWatchVpcEndpoint, "true"]
+  CreateRekognitionVpcEndpoint: !Equals [!Ref RekognitionVpcEndpoint, "true"]
+  CreateGlueVpcEndpoint: !Equals [!Ref GlueVpcEndpoint, "true"]
+  CreateKinesisVpcEndpoint: !Equals [!Ref KinesisVpcEndpoint, "true"]
+  CreateAthenaVpcEndpoint: !Equals [!Ref AthenaVpcEndpoint, "true"]
+
+Resources:
+
+  ###################################### VPC #######################################################
+  VPC:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      TemplateURL: !Sub https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc.yaml
+      Parameters:
+        VPCCidrBlock: !FindInMap
+          - SubnetConfig
+          - VpcCidrBlock
+          - CIDR
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+        CiBuild: !Ref CiBuild
+      TimeoutInMinutes: 15
+
+  ###################################### Network ACL ###############################################
+  NetworkACL:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      TemplateURL: !Sub https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/network-acl.yaml
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+        CiBuild: !Ref CiBuild
+      TimeoutInMinutes: 15
+
+  ###################################### Private Subnet AZ1 ########################################
+  PrivateSubnetAZ1:
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/subnet.yaml
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        SubnetCidrBlock: !FindInMap
+          - SubnetConfig
+          - PrivateSubnetAZ1CidrBlock
+          - CIDR
+        EnableIPV6Cidr: "false"
+        AvaliabilityZone: "us-east-1a"
+        AZ: "az1"
+        NetworkAclId: !GetAtt NetworkACL.Outputs.NetworkAclId
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+        CiBuild: !Ref CiBuild
+      TimeoutInMinutes: 15
+
+  ###################################### Private Subnet AZ2 ########################################
+  PrivateSubnetAZ2:
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/subnet.yaml
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        SubnetCidrBlock: !FindInMap
+          - SubnetConfig
+          - PrivateSubnetAZ2CidrBlock
+          - CIDR
+        AvaliabilityZone: "us-east-1b"
+        AZ: "az2"
+        NetworkAclId: !GetAtt NetworkACL.Outputs.NetworkAclId
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+        CiBuild: !Ref CiBuild
+      TimeoutInMinutes: 15
+
+  ###################################### VPC Endpoint Security Group ###############################
+  VpcEndpointSecurityGroup:
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/security-group.yaml"
+      Parameters:
+        SecurityGroupBaseName: "vpcesg"
+        SecurityGroupDescription: "VPC Endpoint Security Group"
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+        CiBuild: !Ref CiBuild
+      TimeoutInMinutes: 15
+
+  ###################################### VPCE Security Group Ingress Rule  Allow HTTPS ############
+  VpcEndpointSecurityGroupIngressHTTPS:
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/sg-rule.yaml"
+      Parameters:
+        RuleType: "ingress"
+        CidrType: "ipv4"
+        SecurityGroupId: !GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId
+        IPProtocol: "tcp"
+        FromPort: "443"
+        ToPort: "443"
+        CidrIp: !FindInMap
+          - SubnetConfig
+          - VpcCidrBlock
+          - CIDR
+        RuleDescription: "Allow HTTPS ingress"
+      TimeoutInMinutes: 15
+
+  ###################################### VPCE Security Group Egress Rule  Allow HTTPS #############
+  VpcEndpointSecurityGroupEgressHTTPS:
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/sg-rule.yaml"
+      Parameters:
+        RuleType: "egress"
+        CidrType: "ipv4"
+        SecurityGroupId: !GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId
+        IPProtocol: "tcp"
+        FromPort: "443"
+        ToPort: "443"
+        CidrIp: !FindInMap
+          - SubnetConfig
+          - VpcCidrBlock
+          - CIDR
+        RuleDescription: "Allow HTTPS egress"
+      TimeoutInMinutes: 15
+
+  ###################################### S3 Vpc Gateway Endpoint ###################################
+  S3GatewayVpce:
+    Condition: CreateS3VpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "s3"
+        RouteTableIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.RouteTableId, !GetAtt PrivateSubnetAZ2.Outputs.RouteTableId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+
+  ###################################### DynamoDB Vpc Gateway Endpoint #############################
+  DynamoDBGatewayVpce:
+    Condition: CreateDynamoDBVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "dynamodb"
+        RouteTableIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.RouteTableId, !GetAtt PrivateSubnetAZ2.Outputs.RouteTableId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+
+  ###################################### KMS Vpc Interface Endpoint ################################
+  KmsInterfaceVpce:
+    Condition: CreateKmsVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "kms"
+        SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+        SecurityGroupIds: !GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+
+  ###################################### Secrets Manager Vpc Interface Endpoint ####################
+  SecretManagerInterfaceVpce:
+    Condition: CreateSecretManagerVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "secretsmanager"
+        SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+
+  ###################################### SNS Vpc Interface Endpoint ################################
+  SnsInterfaceVpce:
+    Condition: CreateSnsVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "sns"
+        SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+
+  ###################################### SQS Vpc Interface Endpoint ################################
+  SqsInterfaceVpce:
+    Condition: CreateSqsVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "sqs"
+        SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+
+  ###################################### CloudWatch Interface Endpoint #############################
+  CloudWatchInterfaceVpce:
+    Condition: CreateCloudWatchVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "logs"
+        SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+
+  ###################################### Rekognition Interface Endpoint ############################
+  RekognitionInterfaceVpce:
+    Condition: CreateRekognitionVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "rekognition"
+        SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+     
+  ###################################### Glue Interface Endpoint ###################################
+  GlueInterfaceVpce:
+    Condition: CreateGlueVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "glue"
+        SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+
+  ###################################### Kinesis Interface Endpoint ################################
+  KinesisInterfaceVpce:
+    Condition: CreateKinesisVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "kinesisstreams"
+        SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+
+  ###################################### Athena Interface Endpoint #################################
+  AthenaInterfaceVpce:
+    Condition: CreateAthenaVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "athena"
+        SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
+
+Outputs:
+  ###################################### VPC #######################################################
+  VpcId:
+    Description: Vpc Id
+    Value: !GetAtt VPC.Outputs.VpcId
+    Export:
+      Name: !Sub "${AWS::StackName}VpcId"
+  VpcCidrBlock:
+    Description: VPC CI/DR Block
+    Value: !GetAtt VPC.Outputs.CidrBlock
+  VpcCidrBlockAssociations:
+    Description: VPC CI/DR Block Associations
+    Value: !GetAtt VPC.Outputs.CidrBlockAssociations
+  VpcDefaultNetworkAcl:
+    Description: VPC Default ACL
+    Value: !GetAtt VPC.Outputs.DefaultNetworkAcl
+  VpcDefaultSecurityGroup:
+    Description: VPC Default Security Group
+    Value: !GetAtt VPC.Outputs.DefaultSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}DefaultSecurityGroup"
+  ###################################### Network ACL ################################################
+  NetworkAclId:
+    Description: Network ACL Id
+    Value: !GetAtt NetworkACL.Outputs.NetworkAclId
+  ###################################### Private Subnet  AZ1 ######################################
+  PrivateSubnetAZ1Id:
+    Description: Private SubnetAZ1 Id
+    Value: !GetAtt PrivateSubnetAZ1.Outputs.SubnetId
+    Export:
+      Name: !Sub "${AWS::StackName}PrivateSubnetAZ1Id"
+  PrivateSubnetAZ1AvailabilityZone:
+    Description: Private SubnetAZ1 Availability Zone
+    Value: !GetAtt PrivateSubnetAZ1.Outputs.AvailabilityZone
+  PrivateSubnetAZ1AvailabilityZoneId:
+    Description: Private SubnetAZ1 Availability ZoneId
+    Value: !GetAtt PrivateSubnetAZ1.Outputs.AvailabilityZoneId
+  PrivateSubnetAZ1CidrBlock:
+    Description: Private Subnet AZ1 CI/DR Block
+    Value: !GetAtt PrivateSubnetAZ1.Outputs.CidrBlock
+  PrivateSubnetAZ1NetworkAclAssociationId:
+    Description: Private SubnetAZ1 Network Acl Association Id
+    Value: !GetAtt PrivateSubnetAZ1.Outputs.NetworkAclAssociationId
+  PrivateSubnetAZ1RTAssociationId:
+    Description: Private SubnetAZ1 Subnet Route Table Association Id
+    Value: !GetAtt PrivateSubnetAZ1.Outputs.RouteTableAssociationId
+  ###################################### Private Subnet  AZ2 ######################################
+  PrivateSubnetAZ2Id:
+    Description: Private SubnetAZ2 Id
+    Value: !GetAtt PrivateSubnetAZ2.Outputs.SubnetId
+    Export:
+      Name: !Sub "${AWS::StackName}PrivateSubnetAZ2Id"
+  PrivateSubnetAZ2AvailabilityZone:
+    Description: Private SubnetAZ2 Availability Zone
+    Value: !GetAtt PrivateSubnetAZ2.Outputs.AvailabilityZone
+  PrivateSubnetAZ2AvailabilityZoneId:
+    Description: Private SubnetAZ2 Availability ZoneId
+    Value: !GetAtt PrivateSubnetAZ2.Outputs.AvailabilityZoneId
+  PrivateSubnetAZ2CidrBlock:
+    Description: Private Subnet AZ2 CI/DR Block
+    Value: !GetAtt PrivateSubnetAZ2.Outputs.CidrBlock
+  PrivateSubnetAZ2NetworkAclAssociationId:
+    Description: Private SubnetAZ2 Network Acl Association Id
+    Value: !GetAtt PrivateSubnetAZ2.Outputs.NetworkAclAssociationId
+  PrivateSubnetAZ2RTAssociationId:
+    Description: Private SubnetAZ2 Subnet Route Table Association Id
+    Value: !GetAtt PrivateSubnetAZ2.Outputs.RouteTableAssociationId
+  ###################################### Security Group ############################################
+  VpcEndpointSecurityGroupId:
+    Description: Lambda Security Group Id
+    Value: !GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId
+    Export:
+      Name: !Sub "${AWS::StackName}VpcEndpointSecurityGroupId"
+  ###################################### S3 Gateway Endpoint #######################################
+  S3VpceGatewayEndpointId:
+    Condition: CreateS3VpcEndpoint
+    Description: S3 Gateway Vpc Endpoint Id
+    Value: !GetAtt S3GatewayVpce.Outputs.S3GatewayVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}S3GatewayVpceId"
+  ###################################### DynamoDB Gateway Endpoint #################################
+  DynamoDBVpceId:
+    Condition: CreateDynamoDBVpcEndpoint
+    Description: DynamoDB Gateway Vpc Endpoint Id
+    Value: !GetAtt DynamoDBGatewayVpce.Outputs.DynamoDBGatewayVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}DynamoDBGatewayVpceId"
+  ###################################### KMS Interface Endpoint ####################################
+  KmsVpceId:
+    Condition: CreateKmsVpcEndpoint
+    Description: KMS Interface Vpc Endpoint Id
+    Value: !GetAtt KmsInterfaceVpce.Outputs.KmsInterfaceVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}KmsInterfaceVpceId"
+  ###################################### Secret Manager Interface Endpoint #########################
+  SecretManagerVpceId:
+    Condition: CreateSecretManagerVpcEndpoint
+    Description: Secret Manager Interface Vpc Endpoint Id
+    Value: !GetAtt SecretManagerInterfaceVpce.Outputs.SecretsInterfaceVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}SecretManagerInterfaceVpceId"
+  ###################################### SNS Interface Endpoint ####################################
+  SnsVpceId:
+    Condition: CreateSnsVpcEndpoint
+    Description: SNS Interface Vpc Endpoint Id
+    Value: !GetAtt SnsInterfaceVpce.Outputs.SnsInterfaceVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}SnsInterfaceVpceId"
+  ###################################### SQS Interface Endpoint ####################################
+  SqsVpceId:
+    Condition: CreateSqsVpcEndpoint
+    Description: SQS Interface Vpc Endpoint Id
+    Value: !GetAtt SqsInterfaceVpce.Outputs.SqsInterfaceVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}SqsInterfaceVpceId"
+  ###################################### CloudWatch Interface Endpoint #############################
+  CloudWatchVpceId:
+    Condition: CreateCloudWatchVpcEndpoint
+    Description: CloudWatch Interface Vpc Endpoint Id
+    Value: !GetAtt CloudWatchInterfaceVpce.Outputs.CloudWatchInterfaceVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}CloudWatchInterfaceVpceId"
+  ###################################### Rekognition Interface Endpoint ############################
+  RekognitionVpceId:
+    Condition: CreateRekognitionVpcEndpoint
+    Description: Rekognition Interface Vpc Endpoint Id
+    Value: !GetAtt RekognitionInterfaceVpce.Outputs.RekognitionInterfaceVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}RekognitionInterfaceVpceId"
+  ###################################### Glue Interface Endpoint ###################################
+  GlueInterfaceVpceId:
+    Condition: CreateGlueVpcEndpoint
+    Description: Glue Interface Vpc Endpoint Id
+    Value: !GetAtt GlueInterfaceVpce.Outputs.GlueInterfaceVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}GlueInterfaceVpceId"
+  ###################################### Kinesis Interface Endpoint ################################
+  KinesisInterfaceVpceId:
+    Condition: CreateKinesisVpcEndpoint
+    Description: Kinesis Interface Vpc Endpoint Id
+    Value: !GetAtt KinesisInterfaceVpce.Outputs.KinesisInterfaceVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}KinesisInterfaceVpceId"
+  ###################################### Athena Interface Endpoint #################################
+  AthenaInterfaceVpceId:
+    Condition: CreateAthenaVpcEndpoint
+    Description: Athena Interface Vpc Endpoint Id
+    Value: !GetAtt AthenaInterfaceVpce.Outputs.AthenaInterfaceVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}AthenaInterfaceVpceId"
