@@ -5,8 +5,6 @@
 
 ## Table of Contents
 
-## Table of Contents
-
 - [About the Project](#about-the-project)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)

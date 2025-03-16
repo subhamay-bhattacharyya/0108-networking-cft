@@ -1,7 +1,15 @@
 # Changelog
 
-<!-- ## [Unreleased]
-- Initial release, setting the stage for a lot of awesome updates. -->
+## [1.0.1] - 2025-03-15
+### Added
+- Comma separated list of private subnet ids as an exported output
+### Fixed
+- NA
+
+### Changed
+- NA
+
+-------------
 
 ## [1.0.0] - 2025-03-05
 ### Added
