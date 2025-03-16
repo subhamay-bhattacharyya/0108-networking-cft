@@ -4,12 +4,13 @@ Description: "VPC with private only subnets: Root stack template to create
 
 Metadata:
   TemplateName: root-stack.yaml
-  TemplateType: Root Stack Template
+  TemplateType: Root Stack Template to create VPC with private only subnets, Security Group and VPC Endpoints.
   Version: 1.0.0
   Owner: Subhamay Bhattacharyya
   ProjectName: Private VPC
   Modification History:
      1.0.0  Feb 16, 2025  Initial Version
+     1.0.1  Mar 15, 2025  Exported Output Value of comma separated Subnet IDs
   StepsToTest: Manually verify the Stack.
   StepsToCleanup: Stack delete command
 
@@ -34,6 +35,7 @@ Metadata:
     GlueVpcEndpoint: Enable Glue VPC Endpoint (true/false).
     KinesisVpcEndpoint: Enable Kinesis VPC Endpoint (true/false).
     AthenaVpcEndpoint: Enable Athena VPC Endpoint (true/false).
+    ParamStoreVpcEndpoint: Enable Parameter Store VPC Endpoint (true/false).
 
   Mappings:
     SubnetConfig: Defines the CIDR blocks for the VPC and subnets.
@@ -50,6 +52,7 @@ Metadata:
     CreateGlueVpcEndpoint: Condition to create Glue VPC Endpoint.
     CreateKinesisVpcEndpoint: Condition to create Kinesis VPC Endpoint.
     CreateAthenaVpcEndpoint: Condition to create Athena VPC Endpoint.
+    CreateParamStoreVpcEndpoint: Condition to create Parameter Store VPC Endpoint.
 
   Resources:
     VPC: Creates the VPC stack.
@@ -70,6 +73,7 @@ Metadata:
     GlueInterfaceVpce: Creates the Glue VPC Interface Endpoint.
     KinesisInterfaceVpce: Creates the Kinesis VPC Interface Endpoint.
     AthenaInterfaceVpce: Creates the Athena VPC Interface Endpoint.
+    ParamStoreInterfaceVpce: Creates the SSM VPC Interface Endpoint.
 
   Outputs:
     VpcId: The ID of the VPC.
@@ -102,6 +106,8 @@ Metadata:
     GlueInterfaceVpceId: The ID of the Glue VPC Interface Endpoint.
     KinesisInterfaceVpceId: The ID of the Kinesis VPC Interface Endpoint.
     AthenaInterfaceVpceId: The ID of the Athena VPC Interface Endpoint.
+    ParamStoreVpcEndpoint: The ID of the SSM VPC Interface Endpoint.
+
 
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -141,6 +147,7 @@ Metadata:
           - GlueVpcEndpoint
           - KinesisVpcEndpoint
           - AthenaVpcEndpoint
+          - SSMParamStoreVpcEndpoint
 
     ParameterLabels:
       ################################## Project Name and Environment ##############################
@@ -187,6 +194,8 @@ Metadata:
         default: "Enable Kinesis VPC Endpoint."
       AthenaVpcEndpoint:
         default: "Enable Athena VPC Endpoint."
+      SSMParamStoreVpcEndpoint: 
+        default: "Enable Parameter Store VPC Endpoint."
 
 Parameters:
   ###################################### Project Name and Environment ##############################
@@ -357,6 +366,15 @@ Parameters:
       - "false"
     ConstraintDescription: "The value must be either true or false."
 
+  SSMParamStoreVpcEndpoint: 
+    Default: "false"
+    Description: "Enable Parameter Store VPC Endpoint."
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: "The value must be either true or false."
+
 ######################################## Mapppings #################################################
 Mappings:
   SubnetConfig:
@@ -383,7 +401,7 @@ Conditions:
   CreateGlueVpcEndpoint: !Equals [!Ref GlueVpcEndpoint, "true"]
   CreateKinesisVpcEndpoint: !Equals [!Ref KinesisVpcEndpoint, "true"]
   CreateAthenaVpcEndpoint: !Equals [!Ref AthenaVpcEndpoint, "true"]
-
+  CreateParamStoreVpcEndpoint: !Equals [!Ref SSMParamStoreVpcEndpoint, "true"]
 Resources:
 
   ###################################### VPC #######################################################
@@ -751,7 +769,7 @@ Resources:
       TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
       Parameters:
         VpcId: !GetAtt VPC.Outputs.VpcId
-        ServiceName: "kinesisstreams"
+        ServiceName: "kinesis-streams"
         SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
         SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
         ProjectName: !Ref ProjectName
@@ -785,13 +803,34 @@ Resources:
         GitHubRepository: !Ref GitHubRepository
       TimeoutInMinutes: 15
 
+  ###################################### Param Store Interface Endpoint ############################
+  SSMParamStoreInterfaceVpce:
+    Condition: CreateParamStoreVpcEndpoint
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Retain
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${CodeRepositoryS3Bucket}.s3.amazonaws.com/vpc/vpc-endpoint.yaml"
+      Parameters:
+        VpcId: !GetAtt VPC.Outputs.VpcId
+        ServiceName: "ssm"
+        SubnetIds: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+        SecurityGroupIds: !Join [",", [!GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId]]
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        GitHubRef: !Ref GitHubRef
+        GitHubURL: !Ref GitHubURL
+        GitHubWFRunNumber: !Ref GitHubWFRunNumber
+        GitHubSHA: !Ref GitHubSHA
+        GitHubRepository: !Ref GitHubRepository
+      TimeoutInMinutes: 15
 Outputs:
   ###################################### VPC #######################################################
   VpcId:
     Description: Vpc Id
     Value: !GetAtt VPC.Outputs.VpcId
     Export:
-      Name: !Sub "${AWS::StackName}VpcId"
+      Name: !Sub "${AWS::StackName}-VpcId"
   VpcCidrBlock:
     Description: VPC CI/DR Block
     Value: !GetAtt VPC.Outputs.CidrBlock
@@ -805,17 +844,17 @@ Outputs:
     Description: VPC Default Security Group
     Value: !GetAtt VPC.Outputs.DefaultSecurityGroup
     Export:
-      Name: !Sub "${AWS::StackName}DefaultSecurityGroup"
-  ###################################### Network ACL ################################################
+      Name: !Sub "${AWS::StackName}-DefaultSecurityGroup"
+  ###################################### Network ACL ###############################################
   NetworkAclId:
     Description: Network ACL Id
     Value: !GetAtt NetworkACL.Outputs.NetworkAclId
-  ###################################### Private Subnet  AZ1 ######################################
+  ###################################### Private Subnet  AZ1 #######################################
   PrivateSubnetAZ1Id:
     Description: Private SubnetAZ1 Id
     Value: !GetAtt PrivateSubnetAZ1.Outputs.SubnetId
     Export:
-      Name: !Sub "${AWS::StackName}PrivateSubnetAZ1Id"
+      Name: !Sub "${AWS::StackName}-PrivateSubnetAZ1Id"
   PrivateSubnetAZ1AvailabilityZone:
     Description: Private SubnetAZ1 Availability Zone
     Value: !GetAtt PrivateSubnetAZ1.Outputs.AvailabilityZone
@@ -831,12 +870,12 @@ Outputs:
   PrivateSubnetAZ1RTAssociationId:
     Description: Private SubnetAZ1 Subnet Route Table Association Id
     Value: !GetAtt PrivateSubnetAZ1.Outputs.RouteTableAssociationId
-  ###################################### Private Subnet  AZ2 ######################################
+  ###################################### Private Subnet  AZ2 #######################################
   PrivateSubnetAZ2Id:
     Description: Private SubnetAZ2 Id
     Value: !GetAtt PrivateSubnetAZ2.Outputs.SubnetId
     Export:
-      Name: !Sub "${AWS::StackName}PrivateSubnetAZ2Id"
+      Name: !Sub "${AWS::StackName}-PrivateSubnetAZ2Id"
   PrivateSubnetAZ2AvailabilityZone:
     Description: Private SubnetAZ2 Availability Zone
     Value: !GetAtt PrivateSubnetAZ2.Outputs.AvailabilityZone
@@ -852,86 +891,99 @@ Outputs:
   PrivateSubnetAZ2RTAssociationId:
     Description: Private SubnetAZ2 Subnet Route Table Association Id
     Value: !GetAtt PrivateSubnetAZ2.Outputs.RouteTableAssociationId
+  ###################################### Private Subnet Ids ########################################
+  PrivateSubnetIds:
+    Description: Private Subnet Ids
+    Value: !Join [",", [!GetAtt PrivateSubnetAZ1.Outputs.SubnetId, !GetAtt PrivateSubnetAZ2.Outputs.SubnetId]]
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetIds"
   ###################################### Security Group ############################################
   VpcEndpointSecurityGroupId:
     Description: Lambda Security Group Id
     Value: !GetAtt VpcEndpointSecurityGroup.Outputs.SecurityGroupId
     Export:
-      Name: !Sub "${AWS::StackName}VpcEndpointSecurityGroupId"
+      Name: !Sub "${AWS::StackName}-VpcEndpointSecurityGroupId"
   ###################################### S3 Gateway Endpoint #######################################
   S3VpceGatewayEndpointId:
     Condition: CreateS3VpcEndpoint
     Description: S3 Gateway Vpc Endpoint Id
     Value: !GetAtt S3GatewayVpce.Outputs.S3GatewayVpceId
     Export:
-      Name: !Sub "${AWS::StackName}S3GatewayVpceId"
+      Name: !Sub "${AWS::StackName}-S3GatewayVpceId"
   ###################################### DynamoDB Gateway Endpoint #################################
   DynamoDBVpceId:
     Condition: CreateDynamoDBVpcEndpoint
     Description: DynamoDB Gateway Vpc Endpoint Id
     Value: !GetAtt DynamoDBGatewayVpce.Outputs.DynamoDBGatewayVpceId
     Export:
-      Name: !Sub "${AWS::StackName}DynamoDBGatewayVpceId"
+      Name: !Sub "${AWS::StackName}-DynamoDBGatewayVpceId"
   ###################################### KMS Interface Endpoint ####################################
   KmsVpceId:
     Condition: CreateKmsVpcEndpoint
     Description: KMS Interface Vpc Endpoint Id
     Value: !GetAtt KmsInterfaceVpce.Outputs.KmsInterfaceVpceId
     Export:
-      Name: !Sub "${AWS::StackName}KmsInterfaceVpceId"
+      Name: !Sub "${AWS::StackName}-KmsInterfaceVpceId"
   ###################################### Secret Manager Interface Endpoint #########################
   SecretManagerVpceId:
     Condition: CreateSecretManagerVpcEndpoint
     Description: Secret Manager Interface Vpc Endpoint Id
     Value: !GetAtt SecretManagerInterfaceVpce.Outputs.SecretsInterfaceVpceId
     Export:
-      Name: !Sub "${AWS::StackName}SecretManagerInterfaceVpceId"
+      Name: !Sub "${AWS::StackName}-SecretManagerInterfaceVpceId"
   ###################################### SNS Interface Endpoint ####################################
   SnsVpceId:
     Condition: CreateSnsVpcEndpoint
     Description: SNS Interface Vpc Endpoint Id
     Value: !GetAtt SnsInterfaceVpce.Outputs.SnsInterfaceVpceId
     Export:
-      Name: !Sub "${AWS::StackName}SnsInterfaceVpceId"
+      Name: !Sub "${AWS::StackName}-SnsInterfaceVpceId"
   ###################################### SQS Interface Endpoint ####################################
   SqsVpceId:
     Condition: CreateSqsVpcEndpoint
     Description: SQS Interface Vpc Endpoint Id
     Value: !GetAtt SqsInterfaceVpce.Outputs.SqsInterfaceVpceId
     Export:
-      Name: !Sub "${AWS::StackName}SqsInterfaceVpceId"
+      Name: !Sub "${AWS::StackName}-SqsInterfaceVpceId"
   ###################################### CloudWatch Interface Endpoint #############################
   CloudWatchVpceId:
     Condition: CreateCloudWatchVpcEndpoint
     Description: CloudWatch Interface Vpc Endpoint Id
     Value: !GetAtt CloudWatchInterfaceVpce.Outputs.CloudWatchInterfaceVpceId
     Export:
-      Name: !Sub "${AWS::StackName}CloudWatchInterfaceVpceId"
+      Name: !Sub "${AWS::StackName}-CloudWatchInterfaceVpceId"
   ###################################### Rekognition Interface Endpoint ############################
   RekognitionVpceId:
     Condition: CreateRekognitionVpcEndpoint
     Description: Rekognition Interface Vpc Endpoint Id
     Value: !GetAtt RekognitionInterfaceVpce.Outputs.RekognitionInterfaceVpceId
     Export:
-      Name: !Sub "${AWS::StackName}RekognitionInterfaceVpceId"
+      Name: !Sub "${AWS::StackName}-RekognitionInterfaceVpceId"
   ###################################### Glue Interface Endpoint ###################################
   GlueInterfaceVpceId:
     Condition: CreateGlueVpcEndpoint
     Description: Glue Interface Vpc Endpoint Id
     Value: !GetAtt GlueInterfaceVpce.Outputs.GlueInterfaceVpceId
     Export:
-      Name: !Sub "${AWS::StackName}GlueInterfaceVpceId"
+      Name: !Sub "${AWS::StackName}-GlueInterfaceVpceId"
   ###################################### Kinesis Interface Endpoint ################################
   KinesisInterfaceVpceId:
     Condition: CreateKinesisVpcEndpoint
     Description: Kinesis Interface Vpc Endpoint Id
     Value: !GetAtt KinesisInterfaceVpce.Outputs.KinesisInterfaceVpceId
     Export:
-      Name: !Sub "${AWS::StackName}KinesisInterfaceVpceId"
+      Name: !Sub "${AWS::StackName}-KinesisInterfaceVpceId"
   ###################################### Athena Interface Endpoint #################################
   AthenaInterfaceVpceId:
     Condition: CreateAthenaVpcEndpoint
     Description: Athena Interface Vpc Endpoint Id
     Value: !GetAtt AthenaInterfaceVpce.Outputs.AthenaInterfaceVpceId
     Export:
-      Name: !Sub "${AWS::StackName}AthenaInterfaceVpceId"
+      Name: !Sub "${AWS::StackName}-AthenaInterfaceVpceId"
+  ###################################### Param Store Interface Endpoint ############################
+  SSMParamStoreInterfaceVpceId:
+    Condition: CreateParamStoreVpcEndpoint
+    Description: Param Store Interface Vpc Endpoint Id
+    Value: !GetAtt SSMParamStoreInterfaceVpce.Outputs.SSMParamStoreInterfaceVpceId
+    Export:
+      Name: !Sub "${AWS::StackName}-SSMParamStoreInterfaceVpceId"
